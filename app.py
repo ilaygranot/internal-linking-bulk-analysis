@@ -2,6 +2,7 @@ import pandas as pd
 import streamlit as st
 import csv
 import time
+import re
 
 def convert_df_cluster(df_cluster):
  return df_cluster.to_csv().encode('utf-8')
@@ -43,7 +44,7 @@ with tab1:
         # Submit button
         submitted = st.form_submit_button("Apply")
         if submitted:
-            if uploaded_df_cluster is None and uploaded_df_xpath is None:
+            if uploaded_df_cluster is None or uploaded_df_xpath is None:
                 st.write('Please upload both files first!')
             else:
                 # Simple validation
@@ -58,16 +59,24 @@ with tab1:
                     df_xpath.rename(columns={df_xpath.columns[4]: "Text" },inplace=True)
                     # merge the two dataframes on address column base on right join and call it df_merge
                     df_merge = pd.merge(df_cluster, df_xpath, on="Address", how="right")
-                    # Filter by Target Page & Target Keyword - See all pages that NOT link to target page AND CONTAIN the target keywrods
+                    # Filter by Target Page & Target Keyword - See all pages that NOT link to target page AND CONTAIN the target keywords
                     lp_filter = ~df_xpath['Body'].str.contains(target_page)
                     kw_filter = df_xpath['Text'].str.contains(target_kw, case=False)
-                    # create new df base on the filter and call it new_df and drop the column body, status code and  status
-                    new_df = df_merge[lp_filter & kw_filter].drop(columns=['Body','Status Code', 'Status', 'Text'])
+                    # create new df base on the filter and call it new_df
+                    new_df = df_merge[lp_filter & kw_filter]
+                    # create new column that contain the sentence that contain the target keyword
+                    new_df['Context'] = new_df['Text'].apply(lambda x: re.findall(r'[^.]*' + target_kw + '[^.]*', x))
+                    # count the amount of times that the target keyword appear in context
+                    new_df['KW Count'] = new_df['Context'].apply(lambda x: len(x))
+                    # Final Data
+                    df_final = new_df.drop(columns=['Body','Status Code', 'Status', 'Text'])
                     # Preview Data
-                    st.dataframe(new_df)
-                    st.write(len(new_df))
+                    st.dataframe(df_final)
+                    st.write(len(df_final))
                     # Generate CSV
-                    csv = convert_df_cluster(new_df)
+                    csv = convert_df_cluster(df_final)
+                    # Replace all non-ascii characters with the matching ascii character
+                    csv = csv.decode('ascii', 'ignore').encode('ascii')
                     can_download = True
     # Show CSV Download Button
     if can_download and csv is not None:
@@ -82,8 +91,8 @@ with tab2:
         uploaded_bloglistdf = st.file_uploader("upload urls with body html from screaming frog", "csv")
         if uploaded_bloglistdf is not None:
             bloglistdf = pd.read_csv(uploaded_bloglistdf, encoding="utf8")
-            # drop columns "Status Code" and "Status" and "Text 1"
-            bloglistdf = bloglistdf.drop(columns=["Status Code", "Status", "Text 1"])
+            # drop columns "Status Code", "Status" and "Text 1"
+            bloglistdf = bloglistdf.drop(columns=["Status Code", "Status"])
             # convert bloglistdf to list 
             bloglistdata = list(bloglistdf.values.tolist())
     with col2:
@@ -95,24 +104,28 @@ with tab2:
     
     for j in kwlistdata:
         for i in bloglistdata:
-            blog_lower = i[1]
-            blog_lower = blog_lower.lower()   
-            if j[1] in blog_lower: #keyword
-                if j[0] not in blog_lower: #url
-                    templist = [j[1],j[0],i[0]] #keyword,url,source
-                    outputcsvData.append(templist) 
-    
-    outputcsvData = pd.DataFrame(outputcsvData, columns=["Target Keyword", "Target Page", "Source Page"])
+            sourcePage = i[0]
+            body1 = i[1]
+            targetPage = j[0]
+            targetKeyword = j[1]
+            body_lower = body1.lower()
+            if targetKeyword in body_lower: #keyword
+                if targetPage not in body_lower: #url
+                    text1 = i[2]
+                    # apply lambada on str
+                    context = re.findall(r'[^.]*' + targetKeyword + '[^.]*', text1)
+                    templist = [targetKeyword, targetPage, sourcePage, context] #keyword,url,source,context
+                    outputcsvData.append(templist)
+
+    outputcsvData = pd.DataFrame(outputcsvData, columns=["Target Keyword", "Target Page", "Source Page", "Context" ])
     # Create DataFrame from outputcsvData
     outputcsvData = pd.DataFrame(outputcsvData)
     # Generate CSV and name the headers
     csv = convert_df_cluster(outputcsvData)
+    # Replace all non-ascii characters with the matching ascii character
+    csv = csv.decode('ascii', 'ignore').encode('ascii')
     can_download = True
     # Show CSV Download Button
     if can_download and csv is not None:
-        st.download_button("Press to Download",csv,"file.csv","text/csv",key='download-csv')
-
-
-
-
+        st.download_button("Press to Download",csv,"file.csv","text/csv",key='download-csv_2')
 
