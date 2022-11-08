@@ -57,6 +57,9 @@ with tab1:
                     df_xpath.rename(columns={df_xpath.columns[3]: "Body" },inplace=True)
                     # rename columns number 4 to "Text"
                     df_xpath.rename(columns={df_xpath.columns[4]: "Text" },inplace=True)
+                    # drop NaN values from df_xpath and reset index
+                    df_xpath = df_xpath.dropna()
+                    df_xpath = df_xpath.reset_index(drop=True)
                     # merge the two dataframes on address column base on right join and call it df_merge
                     df_merge = pd.merge(df_cluster, df_xpath, on="Address", how="right")
                     # Filter by Target Page & Target Keyword - See all pages that NOT link to target page AND CONTAIN the target keywords
@@ -101,17 +104,17 @@ with tab2:
             kwlistdata = pd.read_csv(uploaded_kwlistdata, encoding="utf8", header=None ).values.tolist()
 
     #define output csv content
-    
+
     for j in kwlistdata:
         for i in bloglistdata:
             sourcePage = i[0]
-            body1 = i[1]
+            body1 = i[1] 
             targetPage = j[0]
             targetKeyword = j[1]
+            text1 = i[2]
             body_lower = body1.lower()
-            if targetKeyword in body_lower: #keyword
+            if targetKeyword in text1: #keyword
                 if targetPage not in body_lower: #url
-                    text1 = i[2]
                     # apply lambada on str
                     context = re.findall(r'[^.]*' + targetKeyword + '[^.]*', text1)
                     templist = [targetKeyword, targetPage, sourcePage, context] #keyword,url,source,context
@@ -125,6 +128,9 @@ with tab2:
     # Replace all non-ascii characters with the matching ascii character
     csv = csv.decode('ascii', 'ignore').encode('ascii')
     can_download = True
+    # Preview Data
+    st.dataframe(outputcsvData)
+    st.write(len(outputcsvData))
     # Show CSV Download Button
     if can_download and csv is not None:
         st.download_button("Press to Download",csv,"file.csv","text/csv",key='download-csv_2')
